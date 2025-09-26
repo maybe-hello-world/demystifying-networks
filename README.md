@@ -1,6 +1,6 @@
-# Supplementary code for the submission "Demystifying Network Foundation Models"
+# Demystifying Network Foundation Models
 
-This repository contains the code and instructions to reproduce the results presented in the paper.
+This repository contains the code and instructions to reproduce the results presented in the paper "Demystifying Network Foundation Models" (NeurIPS 2025).
 
 ## Requirements
 
@@ -32,3 +32,12 @@ pip install -r requirements.txt
 The folder `src` contains the code for all the experiments. Each experiment is located in a separate Jupyter notebook. 
 All experiments in the `src\embeddings_calculation` and `src\perturb*.ipynb` will require full models and environments for reproduction. All other experiments could be run with precalculated embeddings.
 
+## Citation
+```
+@article{beltiukov2025demyst,
+ title={Demystifying Network Foundation Models},
+ author={Beltiukov, Roman and Guthula, Satyandra and Guo, Wenbo and Willinger, Walter and Gupta, Arpit},
+ journal={Advances in neural information processing systems (NeurIPS)},
+ year={2025}
+}
+```
