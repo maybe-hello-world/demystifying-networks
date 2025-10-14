@@ -12,7 +12,7 @@ This code was designed to be run on a machine with 4 GPUs A100 with 80Gb of memo
 
 For most of the experiments (except input feature perturbation), we use the embeddings calculated using the frozen publicly available models used in the paper. These embeddings are included in the repository and all the paths in notebooks are set to use them. For most of the experiments that use precalculated embeddings, you will not need to prepare the full environment for all the models, but instead only prepare the default environment (see requirements.txt). 
 
-The embeddings are available using the following link: https://1drv.ms/u/c/60b97bf95d6e1cc6/Ea_BaGgRvGdIhQMJ4gH_RU4BAc0URN1-0DMLQva0hWkBog?e=iAeyot
+The embeddings are available using the Zenodo link: https://zenodo.org/records/17309174 (alternatively, backup is hosted on OneDrive: https://1drv.ms/u/c/60b97bf95d6e1cc6/Ea_BaGgRvGdIhQMJ4gH_RU4BAc0URN1-0DMLQva0hWkBog?e=iAeyot)
 
 Please, download the embeddings and place them in the `data` folder. The folder `data` should include folders for each model, containing the embeddings for each dataset.
 
