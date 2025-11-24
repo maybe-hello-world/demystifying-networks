@@ -1,6 +1,8 @@
 # Demystifying Network Foundation Models
 
-This repository contains the code and instructions to reproduce the results presented in the paper "Demystifying Network Foundation Models" (NeurIPS 2025).
+This repository contains the code and instructions to reproduce the results presented in the paper ["Demystifying Network Foundation Models" (NeurIPS 2025)](https://neurips.cc/virtual/2025/poster/121652).
+
+Additional materials are available in the folder "pdf".
 
 ## Requirements
 
