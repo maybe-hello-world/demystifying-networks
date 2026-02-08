@@ -38,6 +38,7 @@ class SynthDatasetEmbeddings:
         labels: List of label strings identifying each sample's experimental condition
         label_mapping: Optional function to transform raw labels to standardized format
     """
+    dataset_name: str
     embeddings: np.ndarray
     labels: List[str]
     label_mapping: Optional[callable] = None
@@ -56,15 +57,15 @@ class DatasetInput:
     Attributes:
         dataset_name: Unique identifier for the dataset
         embeddings: Array of shape (n_samples, embedding_dim) containing model embeddings
-        cic_features: Optional numpy array of CIC flowmeter features for metric alignment in the same order as embeddings
+        cic_embeddings: Array of shape (n_samples, embedding_dim) containing model embeddings for CIC calculation (if different)
+        cic_features: Optional numpy array of CIC flowmeter features for metric alignment in the same order as cic_embeddings
         cic_feature_names: Optional list of CIC feature column names
-        synth_embeddings: Optional synthetic dataset embeddings for causal testing and math
     """
     dataset_name: str
     embeddings: np.ndarray
+    cic_embeddings: Optional[np.ndarray] = None
     cic_features: Optional[np.ndarray] = None
     cic_feature_names: Optional[List[str]] = None
-    synth_embeddings: Optional[SynthDatasetEmbeddings] = None
     
     def __post_init__(self):
         # Ensure embeddings is a numpy array
@@ -73,6 +74,10 @@ class DatasetInput:
         
         # Clean NaN/Inf values
         self.embeddings = np.nan_to_num(self.embeddings, nan=0.0, posinf=0.0, neginf=0.0)
+        if self.cic_embeddings is None:
+            self.cic_embeddings = self.embeddings
+        else:
+            self.cic_embeddings = np.nan_to_num(self.cic_embeddings, nan=0.0, posinf=0.0, neginf=0.0)
 
 
 @dataclass
@@ -103,7 +108,7 @@ class EvaluationResults:
         if self.cosine_anisotropy:
             lines.append("\n--- Cosine Anisotropy (Intra-Dataset) ---")
             for ds_name, metrics in self.cosine_anisotropy.items():
-                lines.append(f"  {ds_name}: anisotropy={metrics['anisotropy']:.4f}")
+                lines.append(f"  {ds_name}: anisotropy={metrics['anisotropy']:.4f}, MCC={max(metrics['top_contributions']):.4f}")
         
         if self.intrinsic_dimensionality:
             lines.append("\n--- Intrinsic Dimensionality (2NN) ---")
@@ -113,7 +118,7 @@ class EvaluationResults:
         if self.cka_with_cic_features:
             lines.append("\n--- CKA with CIC Features ---")
             for ds_name, feature_ckas in self.cka_with_cic_features.items():
-                avg_cka = np.mean(list(feature_ckas.values()))
+                avg_cka = np.nanmean(list(feature_ckas.values()))
                 lines.append(f"  {ds_name}: avg_CKA={avg_cka:.4f} (over {len(feature_ckas)} features)")
         
         if self.causal_sensitivity:
@@ -123,6 +128,8 @@ class EvaluationResults:
                 if 'stability_baseline' in metrics:
                     lines.append(f"    Stability baseline: {metrics['stability_baseline']:.4f}")
                 for cond, val in metrics.items():
+                    if cond.endswith("_l1"):
+                        continue
                     if cond != 'stability_baseline' and isinstance(val, (int, float)):
                         lines.append(f"    {cond}: {val:.4f}")
         
@@ -130,10 +137,10 @@ class EvaluationResults:
             lines.append("\n--- Synth Math Results ---")
             for ds_name, results in self.synth_math_results.items():
                 lines.append(f"  {ds_name}:")
-                if 'target_cosine_similarity' in results:
-                    lines.append(f"    Target cosine similarity: {results['target_cosine_similarity']:.4f}")
-                if 'target_centroid_cosine' in results:
-                    lines.append(f"    Target centroid cosine: {results['target_centroid_cosine']:.4f}")
+                for key, val in results.items():
+                    for prefix in {"class", "target", "baseline"}:
+                        if key.startswith(prefix):
+                            lines.append(f"    {key}: {val:.4f}")
         
         lines.append("\n" + "=" * 60)
         return "\n".join(lines)
@@ -550,11 +557,11 @@ def _compute_synth_math(
     """
     if label_order is None:
         label_order = [
-            'fifo_6m_cubic_prof50_36',  # CC change
-            'codel_6m_bbr_prof50_36',   # AQM change
-            'fifo_6m_bbr_prof72_29',    # CrossTraffic change
-            'fifo_6m_bbr_prof50_36',    # Baseline
-            'codel_6m_cubic_prof72_29'  # All changes
+            'fifo_6m_cubic_prof50_36_',  # CC change
+            'codel_6m_bbr_prof50_36_',   # AQM change
+            'fifo_6m_bbr_prof72_29_',    # CrossTraffic change
+            'fifo_6m_bbr_prof50_36_',    # Baseline
+            'codel_6m_cubic_prof72_29_'  # All changes
         ]
     
     embeddings = synth_data.embeddings
@@ -693,16 +700,18 @@ class IntrinsicEvaluationFramework:
     
     def evaluate(
         self,
-        datasets: List[DatasetInput]
+        datasets: List[DatasetInput],
+        synth_datasets: Optional[List[SynthDatasetEmbeddings]] = None,
     ) -> EvaluationResults:
         """Run all enabled evaluations on the provided datasets.
         
         Args:
             datasets: List of DatasetInput objects to evaluate
-        
+            synth_datasets: Optional list of SynthDatasetEmbeddings objects to evaluate
         Returns:
             EvaluationResults object containing all computed metrics
         """
+        synth_datasets = synth_datasets or []
         results = EvaluationResults()
         
         # 1. Cosine Anisotropy (per dataset)
@@ -734,7 +743,7 @@ class IntrinsicEvaluationFramework:
             for ds in datasets:
                 if ds.cic_features is not None:
                     cka_results = _compute_cka_with_cic_features(
-                        ds.embeddings,
+                        ds.cic_embeddings,
                         ds.cic_features,
                         ds.cic_feature_names,
                         show_progress=self.verbose
@@ -745,20 +754,18 @@ class IntrinsicEvaluationFramework:
         if self.compute_causal_sensitivity:
             self._log("Computing causal sensitivity...")
             results.causal_sensitivity = {}
-            for ds in datasets:
-                if ds.synth_embeddings is not None:
-                    sens_results = _compute_causal_sensitivity(ds.synth_embeddings)
-                    results.causal_sensitivity[ds.dataset_name] = sens_results
+            for ds in synth_datasets:
+                sens_results = _compute_causal_sensitivity(ds)
+                results.causal_sensitivity[ds.dataset_name] = sens_results
         
         # 5. Synth Math
         if self.compute_synth_math:
             self._log("Computing synth math...")
             results.synth_math_results = {}
             
-            for ds in datasets:
-                if ds.synth_embeddings is not None:
-                    math_results = _compute_synth_math(ds.synth_embeddings)
-                    results.synth_math_results[ds.dataset_name] = math_results
+            for ds in synth_datasets:
+                math_results = _compute_synth_math(ds)
+                results.synth_math_results[ds.dataset_name] = math_results
         
         self._log("Evaluation complete!")
         return results
