@@ -101,6 +101,9 @@ class EvaluationResults:
     # Synth math
     synth_math_results: Optional[Dict[str, Dict[str, Any]]] = None
     
+    # Perturbation sensitivity
+    perturbation_sensitivity: Optional[Dict[str, Dict[str, float]]] = None
+    
     def summary(self) -> str:
         """Generate a text summary of all results."""
         lines = ["=" * 60, "INTRINSIC EVALUATION FRAMEWORK RESULTS", "=" * 60]
@@ -141,6 +144,16 @@ class EvaluationResults:
                     for prefix in {"class", "target", "baseline"}:
                         if key.startswith(prefix):
                             lines.append(f"    {key}: {val:.4f}")
+        
+        if self.perturbation_sensitivity:
+            lines.append("\n--- Perturbation Sensitivity ---")
+            lines.append(f"  {'Field':<18} {'Random':>10} {'Reorder':>10}")
+            for mask_name, vals in self.perturbation_sensitivity.items():
+                lines.append(
+                    f"  {mask_name:<18} "
+                    f"{vals['random_cosine_similarity']:>10.4f} "
+                    f"{vals['reorder_cosine_similarity']:>10.4f}"
+                )
         
         lines.append("\n" + "=" * 60)
         return "\n".join(lines)
